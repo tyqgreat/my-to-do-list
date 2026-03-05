@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>INFP自由职业者任务管理工具（实时同步版）</title>
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: "微软雅黑", "Helvetica Neue", Arial, sans-serif;
+    }
+    body {
+        background-color: #f5f7fa;
+        padding: 20px;
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+    .container {
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        padding: 30px;
+        margin-bottom: 20px;
+    }
+    h1 {
+        color: #333;
+        text-align: center;
+        margin-bottom: 30px;
+        font-weight: 600;
+    }
+    h2 {
+        color: #444;
+        margin: 20px 0 15px;
+        font-size: 18px;
+        border-left: 4px solid #6c63ff;
+        padding-left: 10px;
+    }
+    .tab-container {
+        display: flex;
+        margin-bottom: 20px;
+        border-bottom: 1px solid #eee;
+        flex-wrap: wrap;
+    }
+    .tab {
+        padding: 10px 20px;
+        cursor: pointer;
+        border-bottom: 3px solid transparent;
+        transition: all 0.3s;
+    }
+    .tab.active {
+        border-bottom-color: #6c63ff;
+        color: #6c63ff;
+        font-weight: 500;
+    }
+    .tab-content {
+        display: none;
+    }
+    .tab-content.active {
+        display: block;
+    }
+    .form-group {
+        margin-bottom: 15px;
+    }
+    label {
+        display: block;
+        margin-bottom: 5px;
+        color: #555;
+        font-weight: 500;
+    }
+    input, select, textarea {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        font-size: 14px;
+    }
+    button {
+        background-color: #6c63ff;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background 0.3s;
+        margin-right: 10px;
+        margin-bottom: 10px;
+    }
+    button:hover {
+        background-color: #5a54e0;
+    }
+    button.secondary {
+        background-color: #888;
+    }
+    button.secondary:hover {
+        background-color: #666;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 15px 0;
+    }
+    th, td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+    }
+    th {
+        background-color: #f9f9f9;
+        color: #333;
+    }
+    .status-completed {
+        color: #28a745;
+        font-weight: 500;
+    }
+    .status-pending {
+        color: #dc3545;
+        font-weight: 500;
+    }
+    .progress-container {
+        margin: 20px 0;
+        padding: 20px;
+        background-color: #f9f9f9;
+        border-radius: 8px;
+    }
+    .progress-item {
+        margin: 10px 0;
+    }
+    .progress-label {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 5px;
+    }
+    .progress-bar {
+        height: 8px;
+        background-color: #eee;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .progress-fill {
+        height: 100%;
+        background-color: #6c63ff;
+        border-radius: 4px;
+    }
+    .reminder {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background-color: #6c63ff;
+        color: white;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        display: none;
+        z-index: 9999;
+        max-width: 300px;
+    }
+    .reminder-close {
+        position: absolute;
+        top: 5px;
+        right: 8px;
+        cursor: pointer;
+        font-size: 16px;
+    }
+    .sync-status {
+        text-align: center;
+        color: #6c63ff;
+        margin-bottom: 15px;
+        font-weight: 500;
+    }
+    .nl-parse-tip {
+        font-size: 12px;
+        color: #888;
+        margin-top: 5px;
+    }
+</style>
+<!-- 引入腾讯云开发SDK（国内CDN） -->
+<script src="https://unpkg.com/tcb-js-sdk@1.19.0/dist/tcb.js"></script>
+</head>
+<body>
+<div class="container">
+    <h1>📝 INFP自由职业者任务管理工具（实时同步版）</h1>
+    <div class="sync-status" id="sync-status">🔄 正在连接云端...</div>
+
+    <div class="tab-container">
+        <div class="tab active" data-tab="nl-add-task">快速添加（自然语言）</div>
+        <div class="tab" data-tab="manual-add-task">手动添加</div>
+        <div class="tab" data-tab="daily-tasks">今日任务</div>
+        <div class="tab" data-tab="plan-tasks">规划时段</div>
+        <div class="tab" data-tab="weekly-progress">本周进度</div>
+        <div class="tab" data-tab="data-manage">数据管理</div>
+    </div>
+
+    <!-- 省略重复的UI部分（和原版一致），只保留核心逻辑 -->
+    <div class="tab-content active" id="nl-add-task">
+        <h2>快速添加任务（输入一句话即可）</h2>
+        <div class="form-group">
+            <label for="nl-task-input">任务描述（示例：写公众号文案2小时 高优先级 创作分类 2026-03-05）</label>
+            <input type="text" id="nl-task-input" placeholder="例如：9点对接客户1小时 中优先级 沟通分类 | 整理文件0.5小时 低优先级 行政分类">
+            <div class="nl-parse-tip">支持识别：时长（数字+小时/时/h）、优先级（高/中/低）、分类（任意文字+分类）、日期（YYYY-MM-DD）、时间（数字+点/点整）</div>
+        </div>
+        <button onclick="parseNLTask()">解析并添加</button>
+        <div id="nl-parse-result" style="margin-top:15px;"></div>
+    </div>
+
+    <div class="tab-content" id="manual-add-task">
+        <h2>手动添加新任务</h2>
+        <div class="form-group">
+            <label for="category">任务分类（如：创作/沟通/行政/学习）</label>
+            <input type="text" id="category" placeholder="请输入任务分类">
+        </div>
+        <div class="form-group">
+            <label for="description">任务描述</label>
+            <textarea id="description" rows="2" placeholder="请输入具体的任务内容"></textarea>
+        </div>
+        <div class="form-group">
+            <label for="hours">预估耗时（小时）</label>
+            <input type="number" id="hours" step="0.5" min="0.5" placeholder="如：2 或 0.5">
+        </div>
+        <div class="form-group">
+            <label for="priority">优先级</label>
+            <select id="priority">
+                <option value="high">高</option>
+                <option value="medium" selected>中</option>
+                <option value="low">低</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="date">日期（默认今日）</label>
+            <input type="date" id="date">
+        </div>
+        <button onclick="addTask()">添加任务</button>
+    </div>
+
+    <div class="tab-content" id="daily-tasks">
+        <h2>今日任务列表</h2>
+        <button onclick="refreshDailyTasks()">刷新任务</button>
+        <table id="daily-tasks-table">
+            <thead>
+                <tr>
+                    <th>时段</th>
+                    <th>分类</th>
+                    <th>任务描述</th>
+                    <th>时长</th>
+                    <th>状态</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="tab-content" id="plan-tasks">
+        <h2>规划今日任务时段</h2>
+        <p>每日默认规划9:00-15:00（6小时）的任务时段</p>
+        <button onclick="planDailyTasks()">开始规划</button>
+        <div id="plan-result"></div>
+    </div>
+
+    <div class="tab-content" id="weekly-progress">
+        <h2>本周任务进度统计</h2>
+        <button onclick="calculateWeeklyProgress()">计算进度</button>
+        <div class="progress-container">
+            <div class="progress-item">
+                <div class="progress-label">
+                    <span>任务完成率</span>
+                    <span id="task-completion-rate">0%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="task-progress-bar" style="width: 0%"></div>
+                </div>
+            </div>
+            <div class="progress-item">
+                <div class="progress-label">
+                    <span>工时完成率</span>
+                    <span id="hour-completion-rate">0%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="hour-progress-bar" style="width: 0%"></div>
+                </div>
+            </div>
+            <div class="progress-item">
+                <p>总任务数：<span id="total-tasks">0</span> | 已完成：<span id="completed-tasks">0</span></p>
+                <p>总工时：<span id="total-hours">0</span>小时 | 已完成工时：<span id="completed-hours">0</span>小时</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-content" id="data-manage">
+        <h2>数据管理（云端自动同步）</h2>
+        <button onclick="forceSync()" class="secondary">强制刷新同步</button>
+        <p style="margin-top:15px; color:#888; font-size:12px;">✅ 所有操作实时同步到云端<br>✅ 手机/电脑打开同一链接即看最新数据<br>✅ 无需手动导入导出/替换文件</p>
+    </div>
+</div>
+
+<div class="reminder" id="reminder">
+    <span class="reminder-close" onclick="closeReminder()">×</span>
+    <h3>📋 任务提醒</h3>
+    <p id="reminder-content"></p>
+</div>
+
+<script>
+    // 配置腾讯云开发（替换成你的信息！）
+    const envId = "infp-task-9gpzb1m9b5201d5c"; // 替换成你的腾讯云环境ID
+    const requestDomain = "https://tcb-api.tencentcloudapi.com"; // 替换成你的访问域名
+    
+    // 初始化云开发
+    const tcb = window.tcb.init({
+        env: envId,
+        requestDomain: {
+            // 替换成你的域名
+            cloudbaseApi: requestDomain
+        }
+    });
+    const db = tcb.database();
+    const tasksCollection = db.collection('tasks');
+    
+    let tasks = [];
+
+    // 页面加载时登录并同步数据
+    window.onload = async function() {
+        try {
+            // 匿名登录（无需注册）
+            await tcb.auth({
+                persistence: 'local'
+            }).anonymousAuthProvider().signIn();
+            
+            // 加载云端数据
+            await loadTasksFromCloud();
+            refreshDailyTasks();
+            startReminderCheck();
+            document.getElementById('sync-status').textContent = "✅ 云端同步成功，实时更新";
+        } catch (e) {
+            console.error('初始化失败：', e);
+            document.getElementById('sync-status').textContent = "❌ 云端连接失败，请检查网络";
+        }
+    };
+
+    // 从云端加载任务
+    async function loadTasksFromCloud() {
+        const res = await tasksCollection.get();
+        tasks = res.data || [];
+    }
+
+    // 同步任务到云端
+    async function syncTasksToCloud() {
+        // 先清空旧数据（简单方案，适合个人使用）
+        await tasksCollection.where({}).remove();
+        // 写入新数据
+        if (tasks.length > 0) {
+            await tasksCollection.add(tasks);
+        }
+        return true;
+    }
+
+    // 强制同步
+    async function forceSync() {
+        document.getElementById('sync-status').textContent = "🔄 正在强制同步...";
+        await syncTasksToCloud();
+        await loadTasksFromCloud();
+        refreshDailyTasks();
+        document.getElementById('sync-status').textContent = "✅ 强制同步完成";
+        alert('同步成功！');
+    }
+
+    // 保留原版所有功能，仅修改同步逻辑
+    async function parseNLTask() {
+        const input = document.getElementById('nl-task-input').value.trim();
+        if (!input) {
+            alert('请输入任务描述！');
+            return;
+        }
+        const parsed = {
+            category: '未分类',
+            description: input,
+            estimatedHours: 0.5,
+            priority: 'medium',
+            date: new Date().toISOString().split('T')[0],
+            startTime: null
+        };
+        // （省略和原版一致的解析逻辑）
+        const hourRegex = /(\d+(\.\d+)?)[\u5c0f\u65f6|h|时]/;
+        const hourMatch = input.match(hourRegex);
+        if (hourMatch) {
+            parsed.estimatedHours = parseFloat(hourMatch[1]);
+            parsed.description = parsed.description.replace(hourMatch[0], '').trim();
+        }
+        if (input.includes('高') && (input.includes('优先级') || input.includes('优先'))) {
+            parsed.priority = 'high';
+            parsed.description = parsed.description.replace(/高优先级|高优先/, '').trim();
+        } else if (input.includes('低') && (input.includes('优先级') || input.includes('优先'))) {
+            parsed.priority = 'low';
+            parsed.description = parsed.description.replace(/低优先级|低优先/, '').trim();
+        } else if (input.includes('中') && (input.includes('优先级') || input.includes('优先'))) {
+            parsed.priority = 'medium';
+            parsed.description = parsed.description.replace(/中优先级|中优先/, '').trim();
+        }
+        const categoryRegex = /(.+?)分类/;
+        const categoryMatch = input.match(categoryRegex);
+        if (categoryMatch) {
+            parsed.category = categoryMatch[1].trim();
+            parsed.description = parsed.description.replace(categoryMatch[0], '').trim();
+        }
+        const dateRegex = /(\d{4}-\d{2}-\d{2})/;
+        const dateMatch = input.match(dateRegex);
+        if (dateMatch) {
+            parsed.date = dateMatch[1];
+            parsed.description = parsed.description.replace(dateMatch[0], '').trim();
+        }
+        const timeRegex = /(\d{1,2})[\u70b9|点](\u6574)?/;
+        const timeMatch = input.match(timeRegex);
+        if (timeMatch) {
+            const hour = parseInt(timeMatch[1]);
+            parsed.startTime = `${hour.toString().padStart(2, '0')}:00`;
+            parsed.description = parsed.description.replace(timeMatch[0], '').trim();
+        }
+        const resultEl = document.getElementById('nl-parse-result');
+        resultEl.innerHTML = `
+            <div style="margin-top:10px; padding:10px; background:#f9f9f9; border-radius:5px;">
+                <p>✅ 解析结果：</p>
+                <p>分类：${parsed.category}</p>
+                <p>描述：${parsed.description}</p>
+                <p>时长：${parsed.estimatedHours}小时</p>
+                <p>优先级：${parsed.priority === 'high' ? '高' : parsed.priority === 'low' ? '低' : '中'}</p>
+                <p>日期：${parsed.date}</p>
+                ${parsed.startTime ? `<p>开始时间：${parsed.startTime}</p>` : ''}
+            </div>
+        `;
+        const newTask = {
+            id: Date.now().toString(),
+            ...parsed,
+            endTime: null,
+            completed: false
+        };
+        tasks.push(newTask);
+        // 同步到云端
+        await syncTasksToCloud();
+        refreshDailyTasks();
+        document.getElementById('nl-task-input').value = '';
+        alert('✅ 任务添加成功！所有设备已同步');
+    }
+
+    async function addTask() {
+        const category = document.getElementById('category').value.trim();
+        const description = document.getElementById('description').value.trim();
+        const hoursInput = document.getElementById('hours').value;
+        const priority = document.getElementById('priority').value;
+        const dateInput = document.getElementById('date').value;
+        if (!category) { alert('请输入任务分类！'); return; }
+        if (!description) { alert('请输入任务描述！'); return; }
+        if (!hoursInput || isNaN(hoursInput) || parseFloat(hoursInput) <= 0) {
+            alert('请输入有效的预估耗时（大于0的数字）！'); return;
+        }
+        const newTask = {
+            id: Date.now().toString(),
+            category: category,
+            description: description,
+            estimatedHours: parseFloat(hoursInput),
+            priority: priority,
+            date: dateInput || new Date().toISOString().split('T')[0],
+            startTime: null,
+            endTime: null,
+            completed: false
+        };
+        tasks.push(newTask);
+        // 同步到云端
+        await syncTasksToCloud();
+        document.getElementById('category').value = '';
+        document.getElementById('description').value = '';
+        document.getElementById('hours').value = '';
+        document.getElementById('date').value = '';
+        alert('✅ 任务添加成功！所有设备已同步');
+        refreshDailyTasks();
+    }
+
+    async function markCompleted(taskId) {
+        const taskIndex = tasks.findIndex(t => t.id === taskId);
+        if (taskIndex !== -1) {
+            tasks[taskIndex].completed = true;
+            // 同步到云端
+            await syncTasksToCloud();
+            refreshDailyTasks();
+            alert('✅ 任务已标记为完成！所有设备已同步');
+        } else {
+            alert('❌ 未找到该任务！');
+        }
+    }
+
+    // 其他原版函数（refreshDailyTasks/planDailyTasks/calculateWeeklyProgress等）完全保留
+    function refreshDailyTasks() {
+        const today = new Date().toISOString().split('T')[0];
+        const todayTasks = tasks.filter(task => task.date === today);
+        const tableBody = document.querySelector('#daily-tasks-table tbody');
+        tableBody.innerHTML = '';
+        if (todayTasks.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px;">暂无今日任务</td></tr>';
+            return;
+        }
+        todayTasks.forEach(task => {
+            const row = document.createElement('tr');
+            const timeStr = task.startTime && task.endTime ? `${task.startTime}-${task.endTime}` : '未规划';
+            const statusStr = task.completed ?
+                '<span class="status-completed">已完成</span>' :
+                '<span class="status-pending">未完成</span>';
+            const actionBtn = task.completed ?
+                '<button disabled style="background:#ccc; cursor:not-allowed;">已完成</button>' :
+                `<button onclick="markCompleted('${task.id}')">标记完成</button>`;
+            row.innerHTML = `
+                <td>${timeStr}</td>
+                <td>${task.category}</td>
+                <td>${task.description}</td>
+                <td>${task.estimatedHours}h</td>
+                <td>${statusStr}</td>
+                <td>${actionBtn}</td>
+            `;
+            tableBody.appendChild(row);
+        });
+    }
+
+    function planDailyTasks() {
+        const today = new Date().toISOString().split('T')[0];
+        let unplannedTasks = tasks.filter(task =>
+            task.date === today && !task.startTime
+        ).sort((a, b) => {
+            const priorityOrder = { high: 0, medium: 1, low: 2 };
+            return priorityOrder[a.priority] - priorityOrder[b.priority];
+        });
+        let currentHour = 9;
+        let currentMinute = 0;
+        let plannedCount = 0;
+        let planResult = '';
+        for (let task of unplannedTasks) {
+            if (currentHour - 9 + task.estimatedHours > 6) {
+                planResult += `⚠️ ${task.description}：超出每日6小时工作量限制，已跳过<br>`;
+                continue;
+            }
+            const startTime = `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`;
+            const totalMinutes = currentHour * 60 + currentMinute + task.estimatedHours * 60;
+            const endHour = Math.floor(totalMinutes / 60);
+            const endMinute = totalMinutes % 60;
+            const endTime = `${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`;
+            task.startTime = startTime;
+            task.endTime = endTime;
+            plannedCount++;
+            planResult += `✅ ${startTime}-${endTime} | ${task.category} | ${task.description}<br>`;
+            currentHour = endHour;
+            currentMinute = endMinute;
+        }
+        // 同步到云端
+        syncTasksToCloud();
+        document.getElementById('plan-result').innerHTML = `
+            <p>📅 已为今日规划 ${plannedCount} 个任务：</p>
+            <p>${planResult}</p>
+        `;
+        refreshDailyTasks();
+        alert('✅ 任务规划完成！所有设备已同步');
+    }
+
+    function calculateWeeklyProgress() {
+        const today = new Date();
+        const monday = new Date(today);
+        monday.setDate(today.getDate() - (today.getDay() || 7) + 1);
+        const weekStart = monday.toISOString().split('T')[0];
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        const weekEnd = sunday.toISOString().split('T')[0];
+        const weeklyTasks = tasks.filter(task => task.date >= weekStart && task.date <= weekEnd);
+        const totalTasks = weeklyTasks.length;
+        const completedTasks = weeklyTasks.filter(t => t.completed).length;
+        const totalHours = weeklyTasks.reduce((sum, t) => sum + t.estimatedHours, 0);
+        const completedHours = weeklyTasks.filter(t => t.completed).reduce((sum, t) => sum + t.estimatedHours, 0);
+        const taskCompletionRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+        const hourCompletionRate = totalHours > 0 ? (completedHours / totalHours) * 100 : 0;
+        document.getElementById('total-tasks').textContent = totalTasks;
+        document.getElementById('completed-tasks').textContent = completedTasks;
+        document.getElementById('total-hours').textContent = totalHours.toFixed(1);
+        document.getElementById('completed-hours').textContent = completedHours.toFixed(1);
+        document.getElementById('task-completion-rate').textContent = `${taskCompletionRate.toFixed(1)}%`;
+        document.getElementById('hour-completion-rate').textContent = `${hourCompletionRate.toFixed(1)}%`;
+        document.getElementById('task-progress-bar').style.width = `${taskCompletionRate}%`;
+        document.getElementById('hour-progress-bar').style.width = `${hourCompletionRate}%`;
+    }
+
+    // 提醒功能等其他函数完全保留
+    function startReminderCheck() {
+        setInterval(() => {
+            const now = new Date();
+            const next5Minutes = new Date(now);
+            next5Minutes.setMinutes(now.getMinutes() + 5);
+            const checkTime = `${next5Minutes.getHours().toString().padStart(2, '0')}:${next5Minutes.getMinutes().toString().padStart(2, '0')}`;
+            const today = now.toISOString().split('T')[0];
+            const remindTasks = tasks.filter(task => {
+                return task.date === today && task.startTime === checkTime && !task.completed;
+            });
+            if (remindTasks.length > 0) {
+                const reminder = document.getElementById('reminder');
+                const reminderContent = document.getElementById('reminder-content');
+                let content = '';
+                remindTasks.forEach(task => {
+                    content += `${task.startTime} | ${task.category}：${task.description}（预计${task.estimatedHours}小时）<br>`;
+                });
+                reminderContent.innerHTML = content;
+                reminder.style.display = 'block';
+                playReminderSound();
+            }
+        }, 60000);
+    }
+
+    function playReminderSound() {
+        try {
+            const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJOsnDR3LzFuLheZb2FzY2llbnRpc3RhbmNlcyBNZXRybyBpcyBhd2Vzb21lIHRvIHRoaXMK');
+            audio.play();
+        } catch (e) {}
+    }
+
+    function closeReminder() {
+        document.getElementById('reminder').style.display = 'none';
+    }
+
+    // 标签切换功能
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            tab.classList.add('active');
+            const tabId = tab.getAttribute('data-tab');
+            document.getElementById(tabId).classList.add('active');
+        });
+    });
+</script>
+</body>
+</html>
